@@ -50,7 +50,7 @@ WORDS = {
         {"word": "zeit", "translation": "время", "example": "Ich habe keine Zeit."},
         {"word": "buch", "translation": "книга", "example": "Das Buch ist gut."},
         {"word": "stadt", "translation": "город", "example": "Die Stadt ist schön."},
-    ]
+    ],
         "korean": [
         {"word": "annyeong", "translation": "привет", "example": "Annyeong! Chineseyo?"},
         {"word": "gamsahabnida", "translation": "спасибо", "example": "Gamsahabnida!"},
@@ -67,12 +67,12 @@ WORDS = {
 }
 
 LANGUAGE_NAMES = {
-    "english": "🇧 Английский",
-    "spanish": "🇪 Испанский",
+    "english": "🇬🇧 Английский",
+    "spanish": "🇸 Испанский",
     "german": "🇩🇪 Немецкий",
-    "korean": "🇰🇷 Корейский"
-
+    "korean": "🇰 Корейский"
 }
+
 
 # ===== БАЗА ДАННЫХ =====
 def init_db():
