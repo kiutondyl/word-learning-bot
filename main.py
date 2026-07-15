@@ -51,12 +51,27 @@ WORDS = {
         {"word": "buch", "translation": "книга", "example": "Das Buch ist gut."},
         {"word": "stadt", "translation": "город", "example": "Die Stadt ist schön."},
     ]
+        "korean": [
+        {"word": "annyeong", "translation": "привет", "example": "Annyeong! Chineseyo?"},
+        {"word": "gamsahabnida", "translation": "спасибо", "example": "Gamsahabnida!"},
+        {"word": "chingu", "translation": "друг", "example": "Nae chingu."},
+        {"word": "jip", "translation": "дом", "example": "Jip-i keoyo."},
+        {"word": "mul", "translation": "вода", "example": "Mul juseyo."},
+        {"word": "gongbu", "translation": "учеба", "example": "Gongbu haeyo."},
+        {"word": "sarang", "translation": "любовь", "example": "Saranghae!"},
+        {"word": "hakgyo", "translation": "школа", "example": "Hakgyo-e gayo."},
+        {"word": "chik", "translation": "работа", "example": "Chik-e gaseyo."},
+        {"word": "il", "translation": "день", "example": "Oneul-eun joheun il."},
+    ]
+
 }
 
 LANGUAGE_NAMES = {
     "english": "🇧 Английский",
     "spanish": "🇪 Испанский",
-    "german": "🇩🇪 Немецкий"
+    "german": "🇩🇪 Немецкий",
+    "korean": "🇰🇷 Корейский"
+
 }
 
 # ===== БАЗА ДАННЫХ =====
