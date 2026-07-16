@@ -1,78 +1,32 @@
 import os
 import random
+import json
 import sqlite3
+import google.generativeai as genai
 from telebot import TeleBot, types
 from dotenv import load_dotenv
 
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+# Настраиваем Gemini
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
+
 bot = TeleBot(BOT_TOKEN)
 
-# ===== СЛОВАРИ СЛОВ =====
-WORDS = {
-    "english": [
-        {"word": "apple", "translation": "яблоко", "example": "I eat an apple every day."},
-        {"word": "book", "translation": "книга", "example": "This book is very interesting."},
-        {"word": "house", "translation": "дом", "example": "My house is big."},
-        {"word": "water", "translation": "вода", "example": "I drink water."},
-        {"word": "friend", "translation": "друг", "example": "He is my best friend."},
-        {"word": "time", "translation": "время", "example": "I don't have time."},
-        {"word": "work", "translation": "работа", "example": "I go to work."},
-        {"word": "day", "translation": "день", "example": "Today is a good day."},
-        {"word": "love", "translation": "любовь", "example": "Love is beautiful."},
-        {"word": "life", "translation": "жизнь", "example": "Life is good."},
-        {"word": "world", "translation": "мир", "example": "The world is big."},
-        {"word": "year", "translation": "год", "example": "This year is special."},
-        {"word": "people", "translation": "люди", "example": "People are kind."},
-        {"word": "way", "translation": "путь", "example": "This is the right way."},
-        {"word": "city", "translation": "город", "example": "I live in a city."},
-    ],
-    "spanish": [
-        {"word": "hola", "translation": "привет", "example": "¡Hola! ¿Cómo estás?"},
-        {"word": "gracias", "translation": "спасибо", "example": "Muchas gracias."},
-        {"word": "amigo", "translation": "друг", "example": "Él es mi amigo."},
-        {"word": "casa", "translation": "дом", "example": "Mi casa es tu casa."},
-        {"word": "agua", "translation": "вода", "example": "Necesito agua."},
-        {"word": "comida", "translation": "еда", "example": "La comida está buena."},
-        {"word": "familia", "translation": "семья", "example": "Mi familia es grande."},
-        {"word": "trabajo", "translation": "работа", "example": "Tengo mucho trabajo."},
-        {"word": "amor", "translation": "любовь", "example": "El amor es importante."},
-        {"word": "tiempo", "translation": "время", "example": "No tengo tiempo."},
-    ],
-    "german": [
-        {"word": "hallo", "translation": "привет", "example": "Hallo, wie geht's?"},
-        {"word": "danke", "translation": "спасибо", "example": "Vielen Dank!"},
-        {"word": "haus", "translation": "дом", "example": "Das Haus ist groß."},
-        {"word": "wasser", "translation": "вода", "example": "Ich trinke Wasser."},
-        {"word": "freund", "translation": "друг", "example": "Er ist mein Freund."},
-        {"word": "arbeit", "translation": "работа", "example": "Ich gehe zur Arbeit."},
-        {"word": "liebe", "translation": "любовь", "example": "Liebe ist schön."},
-        {"word": "zeit", "translation": "время", "example": "Ich habe keine Zeit."},
-        {"word": "buch", "translation": "книга", "example": "Das Buch ist gut."},
-        {"word": "stadt", "translation": "город", "example": "Die Stadt ist schön."},
-    ],
-        "korean": [
-        {"word": "annyeong", "translation": "привет", "example": "Annyeong! Chineseyo?"},
-        {"word": "gamsahabnida", "translation": "спасибо", "example": "Gamsahabnida!"},
-        {"word": "chingu", "translation": "друг", "example": "Nae chingu."},
-        {"word": "jip", "translation": "дом", "example": "Jip-i keoyo."},
-        {"word": "mul", "translation": "вода", "example": "Mul juseyo."},
-        {"word": "gongbu", "translation": "учеба", "example": "Gongbu haeyo."},
-        {"word": "sarang", "translation": "любовь", "example": "Saranghae!"},
-        {"word": "hakgyo", "translation": "школа", "example": "Hakgyo-e gayo."},
-        {"word": "chik", "translation": "работа", "example": "Chik-e gaseyo."},
-        {"word": "il", "translation": "день", "example": "Oneul-eun joheun il."},
-    ]
-
-}
-
+# Поддерживаемые языки
 LANGUAGE_NAMES = {
     "english": "🇬🇧 Английский",
-    "spanish": "🇸 Испанский",
+    "spanish": "🇪 Испанский",
     "german": "🇩🇪 Немецкий",
-    "korean": "🇰 Корейский"
+    "korean": "🇰🇷 Корейский",
+    "french": "🇷 Французский",
+    "japanese": "🇯🇵 Японский",
+    "italian": "🇹 Итальянский",
+    "chinese": "🇨 Китайский"
 }
-
 
 # ===== БАЗА ДАННЫХ =====
 def init_db():
@@ -82,6 +36,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
             language TEXT DEFAULT 'english',
+            difficulty TEXT DEFAULT 'beginner',
             learned_words TEXT DEFAULT '',
             correct_answers INTEGER DEFAULT 0,
             total_answers INTEGER DEFAULT 0
@@ -116,16 +71,53 @@ def update_user(user_id, **kwargs):
 
 def add_learned_word(user_id, word):
     user = get_user(user_id)
-    learned = user[2] if user[2] else ''
+    learned = user[3] if user[3] else ''
     if word not in learned.split(','):
         learned = f"{learned},{word}" if learned else word
         update_user(user_id, learned_words=learned)
 
 def add_answer(user_id, correct):
     user = get_user(user_id)
-    correct_count = user[3] + (1 if correct else 0)
-    total_count = user[4] + 1
+    correct_count = user[4] + (1 if correct else 0)
+    total_count = user[5] + 1
     update_user(user_id, correct_answers=correct_count, total_answers=total_count)
+
+# ===== AI ФУНКЦИЯ =====
+def get_ai_words(language, difficulty="beginner", count=5):
+    """Генерирует слова через Google Gemini"""
+    lang_names = {
+        "english": "English", "spanish": "Spanish", "german": "German", 
+        "korean": "Korean", "french": "French", "japanese": "Japanese",
+        "italian": "Italian", "chinese": "Chinese (Mandarin)"
+    }
+    lang_name = lang_names.get(language, "English")
+    
+    diff_names = {
+        "beginner": "A1-A2 (начальный, базовые слова)", 
+        "intermediate": "B1-B2 (средний, повседневные темы)", 
+        "advanced": "C1-C2 (продвинутый, редкие и сложные слова)"
+    }
+    diff_name = diff_names.get(difficulty, "beginner")
+
+    prompt = f"""
+    Act as a professional language teacher. 
+    Generate exactly {count} useful {lang_name} words for a learner at {diff_name} level.
+    Return ONLY a valid JSON array of objects. Do not write any markdown, no ```json, just the raw array.
+    Format:
+    [
+        {{"word": "word_in_target_language", "translation": "перевод_на_русский", "example": "простой пример предложения с этим словом на целевом языке"}}
+    ]
+    Make sure the JSON is valid and parseable.
+    """
+    
+    try:
+        response = model.generate_content(prompt)
+        clean_text = response.text.replace('```json', '').replace('```', '').strip()
+        words = json.loads(clean_text)
+        return words
+    except Exception as e:
+        print(f"AI Error: {e}")
+        return None
 
 # ===== ИНИЦИАЛИЗАЦИЯ =====
 init_db()
@@ -140,9 +132,15 @@ def start(message):
     
     bot.send_message(
         user_id,
-        "👋 Привет! Я бот для изучения иностранных слов.\n\n"
+        "👋 Привет! Я **WordMaster Pro AI** 🤖\n\n"
+        "Я использую искусственный интеллект Gemini, чтобы подбирать для тебя слова любого уровня сложности!\n\n"
+        "✨ **Возможности:**\n"
+        "- AI генерирует слова под твой уровень\n"
+        "- 8 языков на выбор\n"
+        "- Адаптивное обучение\n\n"
         "Выбери язык для изучения:",
-        reply_markup=markup
+        reply_markup=markup,
+        parse_mode='Markdown'
     )
 
 @bot.message_handler(func=lambda m: m.text in LANGUAGE_NAMES.values())
@@ -154,112 +152,211 @@ def select_language(message):
             bot.send_message(
                 user_id,
                 f"✅ Отлично! Ты выбрал: {lang_name}\n\n"
-                f"Используй команды:\n"
-                f"/learn — выучить новое слово\n"
-                f"/quiz — пройти тест\n"
-                f"/stats — твоя статистика\n"
-                f"/reset — сбросить прогресс",
-                reply_markup=types.ReplyKeyboardRemove()
+                f"🎯 Твой текущий уровень: 🟢 Начальный\n\n"
+                f"**Команды:**\n"
+                "/learn — AI подберет новое слово\n"
+                "/quiz — тест из 5 вопросов от AI\n"
+                "/difficulty — изменить уровень сложности\n"
+                "/stats — твоя статистика\n"
+                "/help — помощь",
+                reply_markup=types.ReplyKeyboardRemove(),
+                parse_mode='Markdown'
             )
             break
+
+@bot.message_handler(commands=['difficulty'])
+def set_difficulty(message):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton("🟢 Начальный (A1-A2)", callback_data="diff_beginner"),
+        types.InlineKeyboardButton("🟡 Средний (B1-B2)", callback_data="diff_intermediate"),
+        types.InlineKeyboardButton("🔴 Продвинутый (C1-C2)", callback_data="diff_advanced")
+    )
+    bot.send_message(message.chat.id, "Выбери свой текущий уровень:", reply_markup=markup)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('diff_'))
+def handle_difficulty(call):
+    user_id = call.message.chat.id
+    level = call.data.split('_')[1]
+    update_user(user_id, difficulty=level)
+    
+    level_names = {"beginner": "🟢 Начальный", "intermediate": "🟡 Средний", "advanced": "🔴 Продвинутый"}
+    bot.answer_callback_query(call.id, f"Уровень изменен на {level_names[level]}")
+    bot.edit_message_text(
+        f"✅ Твой уровень установлен: {level_names[level]}\n\n"
+        f"Теперь AI будет подбирать слова соответственно!", 
+        call.message.chat.id, 
+        call.message.message_id,
+        parse_mode='Markdown'
+    )
 
 @bot.message_handler(commands=['learn'])
 def learn(message):
     user_id = message.chat.id
     user = get_user(user_id)
     lang = user[1]
-    learned = user[2].split(',') if user[2] else []
+    difficulty = user[2]
     
-    available = [w for w in WORDS[lang] if w["word"] not in learned]
+    wait_msg = bot.send_message(user_id, " AI подбирает для тебя идеальное слово...")
     
-    if not available:
-        bot.send_message(user_id, "🎉 Ты выучил все слова! Используй /reset чтобы начать заново.")
-        return
+    words = get_ai_words(lang, difficulty, count=1)
     
-    word_data = random.choice(available)
-    add_learned_word(user_id, word_data["word"])
-    
-    bot.send_message(
-        user_id,
-        f" Новое слово:\n\n"
-        f" *{word_data['word']}*\n"
-        f"📝 Перевод: {word_data['translation']}\n"
-        f" Пример: _{word_data['example']}_\n\n"
-        f"Используй /quiz чтобы проверить знания!",
-        parse_mode='Markdown'
-    )
+    if words and len(words) > 0:
+        word_data = words[0]
+        add_learned_word(user_id, word_data["word"])
+        
+        bot.delete_message(wait_msg.chat.id, wait_msg.message_id)
+        
+        bot.send_message(
+            user_id,
+            f" **Новое слово** ({difficulty}):\n\n"
+            f"🔹 *{word_data['word']}*\n"
+            f"📝 Перевод: {word_data['translation']}\n"
+            f" Пример: _{word_data['example']}_\n\n"
+            f"Используй /quiz чтобы проверить знания!",
+            parse_mode='Markdown'
+        )
+    else:
+        bot.delete_message(wait_msg.chat.id, wait_msg.message_id)
+        bot.send_message(user_id, "❌ AI временно недоступен. Попробуй через минуту.")
 
 @bot.message_handler(commands=['quiz'])
-def quiz(message):
+def start_quiz(message):
     user_id = message.chat.id
     user = get_user(user_id)
-    lang = user[1]
     
-    word_data = random.choice(WORDS[lang])
-    correct_word = word_data["word"]
+    wait_msg = bot.send_message(user_id, " AI генерирует тест из 5 вопросов...")
     
-    other_words = [w["word"] for w in WORDS[lang] if w["word"] != correct_word]
-    options = random.sample(other_words, min(3, len(other_words)))
-    options.append(correct_word)
-    random.shuffle(options)
+    words = get_ai_words(user[1], user[2], count=5)
+    
+    if not words or len(words) < 5:
+        bot.delete_message(wait_msg.chat.id, wait_msg.message_id)
+        bot.send_message(user_id, "❌ Не удалось сгенерировать тест. Попробуй позже.")
+        return
+    
+    bot.delete_message(wait_msg.chat.id, wait_msg.message_id)
+    
+    if not hasattr(bot, 'active_quizzes'):
+        bot.active_quizzes = {}
+        
+    bot.active_quizzes[user_id] = {
+        "questions": words,
+        "current": 0,
+        "correct": 0
+    }
+    send_quiz_question(message, user_id)
+
+def send_quiz_question(message, user_id):
+    quiz = bot.active_quizzes[user_id]
+    if quiz["current"] >= len(quiz["questions"]):
+        finish_quiz(message, user_id)
+        return
+    
+    q = quiz["questions"][quiz["current"]]
     
     markup = types.InlineKeyboardMarkup(row_width=1)
+    
+    # Создаем варианты ответа (1 правильный + 3 неправильных)
+    correct_word = q["word"]
+    # Генерируем неправильные варианты
+    wrong_words = get_ai_words(quiz["questions"][0].get("lang", "english"), "beginner", count=3)
+    options = [correct_word]
+    if wrong_words:
+        for w in wrong_words[:3]:
+            options.append(w["word"])
+    else:
+        options.extend(["apple", "book", "house"])
+    
+    random.shuffle(options)
+    
     for option in options:
-        markup.add(types.InlineKeyboardButton(option, callback_data=f"quiz_{option}_{correct_word}"))
+        markup.add(types.InlineKeyboardButton(
+            option, 
+            callback_data=f"quiz_ans_{option}_{correct_word}"
+        ))
     
     bot.send_message(
         user_id,
-        f"🧠 Тест!\n\n"
-        f"Как будет: *{word_data['translation']}*?",
+        f"🧠 **Вопрос {quiz['current'] + 1}/5**\n\n"
+        f"Как переводится: *{q['word']}*?",
         reply_markup=markup,
         parse_mode='Markdown'
     )
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('quiz_'))
-def handle_quiz(call):
-    parts = call.data.split('_')
-    chosen = parts[1]
-    correct = parts[2]
+@bot.callback_query_handler(func=lambda call: call.data.startswith('quiz_ans_'))
+def handle_quiz_answer(call):
     user_id = call.message.chat.id
+    if user_id not in getattr(bot, 'active_quizzes', {}):
+        return
+        
+    parts = call.data.split('_')
+    chosen = parts[2]
+    correct = parts[3]
     
-    is_correct = chosen == correct
-    add_answer(user_id, is_correct)
+    quiz = bot.active_quizzes[user_id]
     
-    if is_correct:
+    if chosen == correct:
+        quiz["correct"] += 1
         bot.answer_callback_query(call.id, "✅ Правильно!")
-        bot.edit_message_text(
-            f"✅ Правильно!\n\nСлово: *{correct}*",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
     else:
-        bot.answer_callback_query(call.id, "❌ Неправильно")
-        bot.edit_message_text(
-            f"❌ Неправильно!\n\nПравильный ответ: *{correct}*",
-            call.message.chat.id,
-            call.message.message_id,
-            parse_mode='Markdown'
-        )
+        bot.answer_callback_query(call.id, f" Нет. Правильно: {correct}")
+    
+    quiz["current"] += 1
+    send_quiz_question(call.message, user_id)
+
+def finish_quiz(message, user_id):
+    quiz = bot.active_quizzes[user_id]
+    accuracy = (quiz["correct"] / 5 * 100)
+    
+    add_answer(user_id, quiz["correct"] >= 3)
+    
+    emoji = "🏆" if quiz["correct"] >= 4 else "👍" if quiz["correct"] >= 3 else "📚"
+    
+    bot.send_message(
+        user_id,
+        f"{emoji} **Тест завершен!**\n\n"
+        f"✅ Правильных: {quiz['correct']}/5\n"
+        f"🎯 Точность: {accuracy:.0f}%\n\n"
+        f"{'Отличный результат!' if quiz['correct'] >= 4 else 'Продолжай учиться!'}",
+        parse_mode='Markdown'
+    )
+    del bot.active_quizzes[user_id]
 
 @bot.message_handler(commands=['stats'])
 def stats(message):
     user_id = message.chat.id
     user = get_user(user_id)
-    lang = user[1]
-    learned = len(user[2].split(',')) if user[2] else 0
-    total = user[4]
-    correct = user[3]
+    learned = len(user[3].split(',')) if user[3] else 0
+    total = user[5]
+    correct = user[4]
     accuracy = (correct / total * 100) if total > 0 else 0
+    
+    level_emoji = {"beginner": "🟢", "intermediate": "🟡", "advanced": "🔴"}
     
     bot.send_message(
         user_id,
-        f"📊 Твоя статистика:\n\n"
-        f"🌐 Язык: {LANGUAGE_NAMES[lang]}\n"
+        f"📊 **Твоя статистика:**\n\n"
+        f"🌐 Язык: {LANGUAGE_NAMES.get(user[1], 'Не выбран')}\n"
+        f"📈 Уровень: {level_emoji.get(user[2], '🟢')} {user[2].capitalize()}\n"
         f"📚 Выучено слов: {learned}\n"
         f"✅ Правильных ответов: {correct}\n"
         f"📝 Всего ответов: {total}\n"
-        f"🎯 Точность: {accuracy:.1f}%"
+        f"🎯 Точность: {accuracy:.1f}%",
+        parse_mode='Markdown'
+    )
+
+@bot.message_handler(commands=['help'])
+def help_cmd(message):
+    bot.send_message(
+        message.chat.id,
+        "📖 **Справка:**\n\n"
+        "/start — начать и выбрать язык\n"
+        "/learn — получить новое слово от AI\n"
+        "/quiz — пройти тест (5 вопросов)\n"
+        "/difficulty — изменить уровень сложности\n"
+        "/stats — посмотреть статистику\n"
+        "/help — эта справка\n\n"
+        "Бот использует Google Gemini AI для генерации слов!"
     )
 
 @bot.message_handler(commands=['reset'])
@@ -270,5 +367,6 @@ def reset(message):
 
 # ===== ЗАПУСК =====
 if __name__ == "__main__":
-    print("🤖 Бот для изучения слов запущен...")
+    print(" WordMaster Pro AI запущен...")
+    print("Используется Google Gemini API")
     bot.infinity_polling()
