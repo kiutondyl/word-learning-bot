@@ -1,0 +1,19 @@
+# Файлы с секретами
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# База данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Виртуальное окружение
+venv/
+env/
